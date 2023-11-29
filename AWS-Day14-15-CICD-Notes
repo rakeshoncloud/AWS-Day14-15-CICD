@@ -1,7 +1,66 @@
+This is notes for recording the steps for the complete CI/CD setup using 
+AWS managed CI/CD services which are AWS CodeBuild,  AWS CodePipeline and  AWS CodeDeploy.
 
-Implement CI pipeline on AWS using AWS CodePipeline and AWS CodeBuild using git
-Start with Code Build
-Then we wil come to CodePipeline
+The whole setup will be done in two phases:
+
+First phase we will configure AWS CodeBuild and AWS CodePipeline for setting up 
+Continuous integrattion i.e. 
+
+In the second phase, we will be configuring Continuous Delivery using AWS CodeDeploy and AWS CodePipeline.
+
+Remember, AWS CodePipeline will invoke the CI and CD processses unlike Jenkins which implements the CI pipeline 
+and invokes the CD processes.
 
 
+PHASE I
+=======
+AWS Console -> search AWS CodeBuild -> Create Build Project -> 
+Project name: sample-python-flask-service
+-> Source: Add Your github account -> Connect using OAuth->Add repo url -> 
+Environment Image : managed Image -> Compute: EC2 -> OS: Ubuntu-> 
+Runtimes: Standard -> aws/codebuild/standard:7.0
+-> New Service Role -> codebuild-sample-python-flask-service-service-role
+BulldSpec: Insert BulldSpec Commands -> Switch to Editor -> 
+copy and paste the contents of buildspec.yml file or compose the build steps
+-> Create a service role in IAM and add that role to the Build Environment
+->create Project
 
+To create credentials in SystemsManager
+Go to -> Systems Manager -> Parameter Store -> 
+Add credentials in System Manager using path
+/appname/docker-credentials/username
+/appname/docker-credentials/password
+/appname/docker-credentials/url
+
+Go to -> Code Build -> Build Project -> Build Details -> Edit Buildspec
+add these paramaters in the env: parameter-store of the buildspec
+Example: 
+env:
+  parameter-store:
+     DOCKER_REGISTRY_USERNAME: /myapp/docker-credentials/username
+     DOCKER_REGISTRY_PASSWORD: /myapp/docker-credentials/password
+     DOCKER_REGISTRY_URL: /myapp/docker-credentials/url
+
+and use these parameters in the build section of the buildspec.yml:
+      - echo "$DOCKER_REGISTRY_PASSWORD" | docker login -u "$DOCKER_REGISTRY_USERNAME" --password-stdin "$DOCKER_REGISTRY_URL"
+      - docker build -t "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest" .
+      - docker push "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest"
+
+Start build -> Build failed -> we need to attach the AmazonSSMFullAccess permission to the service role created above.
+so that CodeBuild service will be able to connect to SystemsManager service to fetch the credentails.
+
+Start Build -> Check if the Build is success
+If Build Failed, check the build logs for typos or any other issue with the build parameters.
+
+If Build is successful,  Create AWS CodePipeline service.
+Go to AWS CodePipeline -> Name: sample-python-flash-app-pipeline -> Version 2 pipleine  -> 
+Assign the default role -> Next -> select Source as Github V2 -> Next -> Connect to your github account 
+-> Add Connection name -> Coonect to Github-> Select the Github account name -> Connect -> 
+select repository name -> Branch Name: main -> Output artifact format: CodePipeline Default -> Next
+-> Build: AWS CodeBuild Project Name: sample-python-flask-service Build Type: Single Build -> Next
+-> Add Deploy Stage: Deploy -> skip Deploy stage (will be add phase 2) -> Review it once
+(read through) and click on Create pipeline 
+
+The newly create Pipeline should start updating and confgures the project for future builds.
+Update the github repository and check if the newly createc CodePipeline is auto triggered and the build
+is completed. It will take some time for the pipeline build to complete.	
