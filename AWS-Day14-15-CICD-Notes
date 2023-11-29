@@ -4,12 +4,13 @@ AWS managed CI/CD services which are AWS CodeBuild,  AWS CodePipeline and  AWS C
 The whole setup will be done in two phases:
 
 First phase we will configure AWS CodeBuild and AWS CodePipeline for setting up 
-Continuous integrattion i.e. 
+Continuous integrattion.
 
-In the second phase, we will be configuring Continuous Delivery using AWS CodeDeploy and AWS CodePipeline.
+In the second phase, we will be configuring Continuous Delivery using AWS CodeDeploy and 
+AWS CodePipeline services.
 
-Remember, AWS CodePipeline will invoke the CI and CD processses unlike Jenkins which implements the CI pipeline 
-and invokes the CD processes.
+Do remember that the AWS CodePipeline only will invoke the CI and CD processses unlike Jenkins 
+which implements the CI pipeline and invokes the CD processes.
 
 
 PHASE I
@@ -46,13 +47,20 @@ and use these parameters in the build section of the buildspec.yml:
       - docker build -t "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest" .
       - docker push "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest"
 
-Start build -> Build failed -> we need to attach the AmazonSSMFullAccess permission to the service role created above.
-so that CodeBuild service will be able to connect to SystemsManager service to fetch the credentails.
+Start build -> Build failed -> we need to attach the AmazonSSMFullAccess permission to the 
+service role created above so that CodeBuild service will be able to connect to SystemsManager 
+service to fetch the credentails.
 
-Start Build -> Check if the Build is success
-If Build Failed, check the build logs for typos or any other issue with the build parameters.
+Start Build -> Check the Build result and the logs.
 
-If Build is successful,  Create AWS CodePipeline service.
+If the Build has failed, check the build logs for typos or any other issue with the build parameters
+and edit the Build details -> buildspec accordingly.
+
+If the Build is successful,  check whether the docker image is pushed to the docker hub registry
+by logging into your docker hub account. 
+
+Create AWS CodePipeline service.
+
 Go to AWS CodePipeline -> Name: sample-python-flash-app-pipeline -> Version 2 pipleine  -> 
 Assign the default role -> Next -> select Source as Github V2 -> Next -> Connect to your github account 
 -> Add Connection name -> Coonect to Github-> Select the Github account name -> Connect -> 
@@ -61,6 +69,8 @@ select repository name -> Branch Name: main -> Output artifact format: CodePipel
 -> Add Deploy Stage: Deploy -> skip Deploy stage (will be add phase 2) -> Review it once
 (read through) and click on Create pipeline 
 
-The newly create Pipeline should start updating and confgures the project for future builds.
+The newly create Pipeline should start updating for future builds.
 Update the github repository and check if the newly createc CodePipeline is auto triggered and the build
 is completed. It will take some time for the pipeline build to complete.	
+
+If the Build is successful,  check whether the docker image of the sample python app is updated in the docker hub registry.
