@@ -44,10 +44,10 @@ Add Credentials to AWS Systems Manager
 --------------------------------------
 To create credentials in SystemsManager
 Go to -> Systems Manager -> Parameter Store -> 
-Add credentials in System Manager using path
+Add credentials in System Manager using path:
 /appname/docker-credentials/username
 /appname/docker-credentials/password
-/appname/docker-credentials/url
+/appname/docker-registry/url
 
 Go to -> Code Build -> Build Project -> Build Details -> Edit Buildspec
 add these paramaters in the env: parameter-store of the buildspec
@@ -56,7 +56,7 @@ env:
   parameter-store:
      DOCKER_REGISTRY_USERNAME: /myapp/docker-credentials/username
      DOCKER_REGISTRY_PASSWORD: /myapp/docker-credentials/password
-     DOCKER_REGISTRY_URL: /myapp/docker-credentials/url
+     DOCKER_REGISTRY_URL: /myapp/docker-registry/url
 
 and use these parameters in the build section of the buildspec.yml:
       - echo "$DOCKER_REGISTRY_PASSWORD" | docker login -u "$DOCKER_REGISTRY_USERNAME" --password-stdin "$DOCKER_REGISTRY_URL"
@@ -152,7 +152,7 @@ This tag is used by the AWS CodeDeploy service as CodeDeploy service needs an EC
 Tags also help the CodeDeploy service to idenify the EC2 instance for deploying the application. We may give same tags for 
 multiple EC2 instances because CodeDeploy can be used to deploy the application on multiple EC2 instances.
 
-Install CdeoDeploy Agent in EC2 instance
+Install CodeDeploy Agent in EC2 instance
 ----------------------------------------
 
  Agent is needed To link between Nodes for communicating, for example agent is uced in Jenkins between Worker nodes and Master.
@@ -174,7 +174,7 @@ Install CdeoDeploy Agent in EC2 instance
    
    Use wget https://bucket-name.s3.region-identifier.amazonaws.com/latest/install 
    replace bucket-name and region-identifier with your region values.
-     wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+   wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
    
  3. Change permission of thw install script.
      chmod +x ./install
@@ -203,7 +203,7 @@ Give permission to EC2 instance: create and assigning IAM Role
 
  Create a Role:
  --------------  
-  IAM-> Roles -> create Role -> use case: Grant permission to CodeDeploy -> Next -> 
+  IAM-> Roles -> create Role -> use case: Grant permission to access EC2 -> Next -> 
   Name: ec2-codedeploy-role -> Create Role
   
  Assign the role to EC2 instance:
@@ -231,10 +231,9 @@ Create deployment group:
     CodeDeploy -> sample-python-flask-app -> Create Deployment Group -> Enter Deployment Group name: sample-python-app
     service role: assign the service role which grants permission for AWS CodeDeploy to access the EC2 instance.
 
-  Note: We can create seperate seperate roles: one for EC2 to CodeDeploy access and another role 
-  for CodeDeploy to EC2 instance access. But also we can use a single role for both way access, 
-  i.e. EC2 instance to CodeDeploy app access and CodeDeploy app to EC2 instance access.
-
+  Note: We have to create seperate seperate roles: one for EC2 instance to to access CodeDeploy service
+  and another role for CodeDeploy to access EC2 instance.
+  
   For this we have to assign the EC2 access permission to the role create above i.e. to ec2-codedeploy-role
   
     IAM->Roles->ec2-codedeploy-role-> Add Permissions -> Attach Policies -> AmazonEC2FullAccess -> Add Permissions
@@ -253,7 +252,7 @@ Create deployment group:
    
 Create Deployment: 
 ------------------
-The deployment or implementation of deployment steps are done in this stage.
+  The deployment or implementation of deployment steps are done in this stage.
   Create Deployment ->  Deployment Group: select sample-python-app -> 
   Revision Type: select "My application is stored in GitHub"
   GitHub token name -> Connect to GitHub-> Add Connection Name and 
@@ -291,5 +290,7 @@ Integrate with CodePipeline
 ===========================
 
 Go to the CodePipeline in the Phase I of this CI/CD setup.
-Edit the Pipeline and add the Daployment to this pipeline.
+Edit the Pipeline and Edit Build Stage -> Add Action - > Add Deployment details in the Edit Actions -> Save changes and make and commit
+changes to your github repository in order to trigger the pipeline for all stages.
+
 Check whether the aaplication is deployed in the EC2 instance.
