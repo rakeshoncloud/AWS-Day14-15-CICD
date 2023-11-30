@@ -1,31 +1,47 @@
-This is notes for recording the steps for the complete CI/CD setup using 
-AWS managed CI/CD services which are AWS CodeBuild,  AWS CodePipeline and  AWS CodeDeploy.
+This is notes for recording the steps for the complete CI/CD setup using
+AWS managed CI/CD services:
+
+AWS CodeBuild  
+AWS CodePipeline
+AWS CodeDeploy
 
 The whole setup will be done in two phases:
 
-First phase we will configure AWS CodeBuild and AWS CodePipeline for setting up 
-Continuous integrattion.
+In the first phase, we will configure AWS CodeBuild and AWS CodePipeline for setting up 
+Continuous integrattion. In the second phase, we will be configuring Continuous Delivery 
+using AWS CodeDeploy, AWS EC2 instance and AWS CodePipeline services to deploy the 
+applicaiton to EC2 instance(s).
 
-In the second phase, we will be configuring Continuous Delivery using AWS CodeDeploy and 
-AWS CodePipeline services.
-
-Do remember that the AWS CodePipeline only will invoke the CI and CD processses unlike Jenkins 
+FYI:  AWS CodePipeline only will invoke the CI and CD processses unlike Jenkins 
 which implements the CI pipeline and invokes the CD processes.
 
 
 PHASE I
-=======
+~~~~~~~
+
+Create a Role in IAM
+---------------------
+WE need a role for the AWS CodeBuild Service to build the .
+ 
+  Go to IAM -> Roles -> Create Role ->AWS Service -> Use Case: Type CodeBuild 
+  -> Role Name: sample-python-app-role -> Create Role.
+
+Create Project in CodeBuild
+---------------------------
 AWS Console -> search AWS CodeBuild -> Create Build Project -> 
 Project name: sample-python-flask-service
 -> Source: Add Your github account -> Connect using OAuth->Add repo url -> 
 Environment Image : managed Image -> Compute: EC2 -> OS: Ubuntu-> 
 Runtimes: Standard -> aws/codebuild/standard:7.0
--> New Service Role -> codebuild-sample-python-flask-service-service-role
+-> New Service Role -> select role create above: sample-python-app-role
+
 BulldSpec: Insert BulldSpec Commands -> Switch to Editor -> 
 copy and paste the contents of buildspec.yml file or compose the build steps
 -> Create a service role in IAM and add that role to the Build Environment
 ->create Project
 
+Add Credentials to AWS Systems Manager
+--------------------------------------
 To create credentials in SystemsManager
 Go to -> Systems Manager -> Parameter Store -> 
 Add credentials in System Manager using path
@@ -47,11 +63,24 @@ and use these parameters in the build section of the buildspec.yml:
       - docker build -t "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest" .
       - docker push "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest"
 
-Start build -> Build failed -> we need to attach the AmazonSSMFullAccess permission to the 
+Granting Systems Manager access to CodeBuild Service
+-----------------------------------------------------
+ IAM -> Roles -> select sample-python-app-role -> Add permissions
+ -> Attach Policies -> type SSM in search box.->
+ -> select AmazonSSMFullAccess -> Add permissions
+
+Building the Application
+------------------------
+AWS Console-> CodeBuild -> select sample-python-flash-service -> Start build.
+Check the Build result and the build logs.
+
+Note: If Build has failed -> 
+we need to attach the AmazonSSMFullAccess permission to the 
 service role created above so that CodeBuild service will be able to connect to SystemsManager 
 service to fetch the credentails.
 
-Start Build -> Check the Build result and the logs.
+After corrections: 
+Repeat Start Build and Check the Build result and the build logs.
 
 If the Build has failed, check the build logs for typos or any other issue with the build parameters
 and edit the Build details -> buildspec accordingly.
@@ -60,7 +89,7 @@ If the Build is successful,  check whether the docker image is pushed to the doc
 by logging into your docker hub account. 
 
 Create AWS CodePipeline service.
-
+--------------------------------
 Go to AWS CodePipeline -> Name: sample-python-flash-app-pipeline -> Version 2 pipleine  -> 
 Assign the default role -> Next -> select Source as Github V2 -> Next -> Connect to your github account 
 -> Add Connection name -> Coonect to Github-> Select the Github account name -> Connect -> 
@@ -69,8 +98,198 @@ select repository name -> Branch Name: main -> Output artifact format: CodePipel
 -> Add Deploy Stage: Deploy -> skip Deploy stage (will be add phase 2) -> Review it once
 (read through) and click on Create pipeline 
 
-The newly create Pipeline should start updating for future builds.
+The newly created Pipeline should start updating for future builds.
 Update the github repository and check if the newly createc CodePipeline is auto triggered and the build
 is completed. It will take some time for the pipeline build to complete.	
 
 If the Build is successful,  check whether the docker image of the sample python app is updated in the docker hub registry.
+
+
+PHASE II
+~~~~~~~~
+
+Create CodeDeploy Application
+=============================
+   Go to -> AWS Console -> login using IAM user -> Search CodeDeploy -> Geting started -> Create Application
+   Application Name: sample-python-flask-app
+   Compute platform: EC2/On-premises
+   Create Application
+
+ Note: Depending on the need of the organisation, we may have to create 100 applications. But if its a repetative task,
+ we have to use AWS CLI. But for learning and understanding the complete workflow, its a good practice to start with the UI.
+
+Configuring the EC2 instance:
+=============================
+
+Create EC2 Instance
+-------------------
+
+ AWS Console->EC2 Dashboard -> Instances -> Launch Instamces ->
+ Name: sample-python-app-instance
+ Type: t2.micro
+ Key Value Pair: use as per your account
+ Enable Public IP (check auto assign public IP is enabled)
+ Create EC2 instance
+
+Tagging the EC2 instance
+------------------------
+Why tags? 
+Tagging is used for identification of resource(s).
+Tags also play an important role in Cost Optimisation.
+
+Note: In an organisation, Tag is also used for differentiating the EC2 instances 
+between teams and environments using the naming conventions for key-value pair. 
+For example, in real life organisations we may use the following key-value paur for tags.
+1. Key: project Value: payments
+2. Key: environment Value: Production
+
+Furthermore, when you are searching for EC2 instances, Tags helps us in filtering or identifying 
+the resources based on the Key-value pair. Also, multiple tags can be created for the same instance.
+
+ Go to -> EC2 Instance -> Actions -> Instance Settings -> Manage Tags -> set Key: Name and Value: sample-python -> Save
+
+This tag is used by the AWS CodeDeploy service as CodeDeploy service needs an EC2 instance to deploy the sample python app.
+Tags also help the CodeDeploy service to idenify the EC2 instance for deploying the application. We may give same tags for 
+multiple EC2 instances because CodeDeploy can be used to deploy the application on multiple EC2 instances.
+
+Install CdeoDeploy Agent in EC2 instance
+----------------------------------------
+
+ Agent is needed To link between Nodes for communicating, for example agent is uced in Jenkins between Worker nodes and Master.
+
+  Open Terminal Window -> Login to EC2 instance -> ssh -i /location/to/key ubuntu@ipaddress
+
+ Refer to the AWS document for the steps to install Agent on Ubuntu Server using the below link.
+ https://docs.aws.amazon.com/codedeploy/latest/userguide/codedeploy-agent-operations-install-ubuntu.html
+
+ 1. update and install ruby full package: 
+ 
+    sudo apt update
+    sudo apt install ruby-full -y
+    sudo apt install wget
+ 
+ 2. Download Install script - 
+   (from the nearest region in order to reduce the latency)
+     cd /home/ubuntu
+   
+   Use wget https://bucket-name.s3.region-identifier.amazonaws.com/latest/install 
+   replace bucket-name and region-identifier with your region values.
+     wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+   
+ 3. Change permission of thw install script.
+     chmod +x ./install
+
+ 4. Install the Agent by running the install script.
+     sudo ./install auto
+
+ 5. Start the service.
+     sudo service codedeploy-agent status
+
+   # if there is error: No AWS CodeDeploy agent running, then run the following commands:
+   
+     sudo service codedeploy-agent start
+     sudo service codedeploy-agent status
+
+Install Docker in EC2 instance
+------------------------------
+ sudo apt install docker.io -y
+ 
+Give permission to EC2 instance: create and assigning IAM Role
+--------------------------------------------------------------
+ We need to allow AWS CodeDeploy to communicate with the EC2 instance.
+ Therefore we use IAM roles for this.
+ Note: We use IAM Roles for granting permission to any AWS service to access or use another AWS service. 
+ But if we want to grant permission for a user to access AWS service, then we have to use IAM User.
+
+ Create a Role:
+ --------------  
+  IAM-> Roles -> create Role -> use case: Grant permission to CodeDeploy -> Next -> 
+  Name: ec2-codedeploy-role -> Create Role
+  
+ Assign the role to EC2 instance:
+ --------------------------------
+   Instances-> select the EC2 instance -> Actions-> Security -> Modify IAM role
+   select ec2-codedeploy-role 
+   
+Restart the CodeDeploy Agent:
+-----------------------------
+Everytime we modify the CodeDeploy service or EC2 instance in AWS, we need to restart the agent
+   
+   sudo service codedeploy-agent restart
+   sudo service codedeploy-agent status # verify if it has restarted
+
+Configuring the CodeDeploy: 
+===========================
+
+After we created the CodeDeploy applicaiton, we need to provide source code, deployment details for this application.
+And also we need to connect the EC2 instance to the CodeDeploy application so that the application deploys the artifacts 
+to the targeted EC2 instances. Therefore we need to provide the target group i.e the Deployment Group
+for CodeDeploy application.
+
+Create deployment group:
+------------------------
+    CodeDeploy -> sample-python-flask-app -> Create Deployment Group -> Enter Deployment Group name: sample-python-app
+    service role: assign the service role which grants permission for AWS CodeDeploy to access the EC2 instance.
+
+  Note: We can create seperate seperate roles: one for EC2 to CodeDeploy access and another role 
+  for CodeDeploy to EC2 instance access. But also we can use a single role for both way access, 
+  i.e. EC2 instance to CodeDeploy app access and CodeDeploy app to EC2 instance access.
+
+  For this we have to assign the EC2 access permission to the role create above i.e. to ec2-codedeploy-role
+  
+    IAM->Roles->ec2-codedeploy-role-> Add Permissions -> Attach Policies -> AmazonEC2FullAccess -> Add Permissions
+ 
+  Deployment stratagies: Refer various types of Deployments: Blue Green, Canary Mode, Alternate backend model.
+
+    Select -> In-Place Deployment model 
+  
+    Environment Configuration -> Select Amazon EC2 insatnces - Tag Group : Key: Name and Value: sample-python
+  
+  See Above for "1 unique matched instance" message below AWS EC2 Instances check box to confirm that the CodeDeploy
+  group targets the correct EC2 instance for deploying the sample python application.
+  
+    Disable the Load Balancer: -> uncheck Enable load balancing 
+    Create deployment group.
+   
+Create Deployment: 
+------------------
+The deployment or implementation of deployment steps are done in this stage.
+  Create Deployment ->  Deployment Group: select sample-python-app -> 
+  Revision Type: select "My application is stored in GitHub"
+  GitHub token name -> Connect to GitHub-> Add Connection Name and 
+  connect to your Github account where the application files are stored.
+  Repository name: your-username/your-repository
+  -> CommitID: Go to Github and click on latst commits -> copy latest commitID
+  and paste.
+  -> Create Deployment.
+
+appspec.yml file need to be present at the root of your repository as CodeDeploy 
+does not support folder level access of GitHub repository.
+
+  Copy appspec.yml from your Github repository to the root folder of your repository.
+  Create a folder named scripts in your repository and create two new script files:
+    
+	stop_container.sh # to cleanup the application image 
+    start_container.sh # to pull the application image and  start the app/service.
+	
+To download the application image: copy the docker pull command from latest application 
+image from your docker-hub registry account and paste it into the start_container.sh file.
+	
+	docker pull reponame/sample_python_app
+	
+To start/run the downloaded application image, add the below command to start_container.sh file.
+
+    docker run -d -p 5000:5000 reponame/sample_python_app
+
+    Note: the tag latest is not needed for the above docker commands because by default the tags are latest.
+
+Edit the stop_container.sh and add the commands for stopping the already running application image.
+
+    docker images | aws -F" " '{Print $1}'
+
+Integrate with CodePipeline
+===========================
+
+Go to the CodePipeline in the Phase I of this CI/CD setup.
+Edit the Pipeline and add the Daployment to this pipeline.
+Check whether the aaplication is deployed in the EC2 instance.
