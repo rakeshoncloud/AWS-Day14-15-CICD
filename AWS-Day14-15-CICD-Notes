@@ -294,3 +294,5 @@ Edit the Pipeline and Edit Build Stage -> Add Action - > Add Deployment details 
 changes to your github repository in order to trigger the pipeline for all stages.
 
 Check whether the aaplication is deployed in the EC2 instance.
+
+
